@@ -16,28 +16,53 @@ function initApiTests() {
     }
 }
 
+// function apiTestBtnClick(e) {
+//     const [prefix, apiName, apiMethod, _] = e.target.id.split('-');
+//     const resId = `${prefix}-${apiName}-${apiMethod}-result`;
+//     const td = document.getElementById(resId);
+//     if (td) {
+//         fetch(`/${apiName}`, {
+//             method: apiMethod.toUpperCase(),
+//             headers: {
+//                 "Access-Control-Allow-Origin": "cgi221.loc",
+//                 "My-Custom-Header": "My Value",
+//                 "Authorization": "Basic QWxhZGRpbjpvcGVuIHN1c2FtZQ=="
+//             }
+//         }).then(r => {
+//             if (r.ok) {
+//                 r.json().then(j => td.innerHTML = `<pre>${JSON.stringify(j, null, 4)}</pre>`);
+//             }
+//             else {
+//                 r.text().then(t => td.innerText = t);
+//             }
+//         });
+//     }
+//     else {
+//         throw "Container not found: " + resId;
+//     }
+// }
+
+
 function apiTestBtnClick(e) {
     const [prefix, apiName, apiMethod, _] = e.target.id.split('-');
     const resId = `${prefix}-${apiName}-${apiMethod}-result`;
     const td = document.getElementById(resId);
+
     if (td) {
+        const headers = {};
+        if (apiName === "order") {
+            headers["My-Custom-Header"] = "My Value";
+        }
+
         fetch(`/${apiName}`, {
             method: apiMethod.toUpperCase(),
-            headers: {
-                "Access-Control-Allow-Origin": "cgi221.loc",
-                "My-Custom-Header": "My Value",
-                "Authorization": "Basic QWxhZGRpbjpvcGVuIHN1c2FtZQ=="
-            }
+            headers: headers
         }).then(r => {
             if (r.ok) {
                 r.json().then(j => td.innerHTML = `<pre>${JSON.stringify(j, null, 4)}</pre>`);
-            }
-            else {
+            } else {
                 r.text().then(t => td.innerText = t);
             }
         });
-    }
-    else {
-        throw "Container not found: " + resId;
     }
 }

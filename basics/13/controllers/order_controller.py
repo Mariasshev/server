@@ -7,9 +7,16 @@ class OrderController:
         self.request = request
 
     def serve(self):
-        print("Content-Type: application/json; charset=utf-8")
+        # проверяем наличие кастомного заголовка
+        if "My-Custom-Header" not in self.request.headers:
+            print("Status: 403 Forbidden")
+            print("Content-Type: text/plain; charset=utf-8")
+            print()
+            print("Custom header is missing")
+            return
 
-        method = getattr(self.request, "REQUEST_METHOD", "GET").upper()
+        # получаем метод запроса
+        method = getattr(self.request, "request_method", "GET").upper()
 
         if method == "GET":
             return self.do_get()
@@ -36,8 +43,9 @@ class OrderController:
             "method": "GET",
             "message": "Отримано дані",
             "sample": [1, 2, 3],
+            "headers": self.request.headers
         }
-
+        print("Content-Type: application/json; charset=utf-8")
         print()
         print(json.dumps(data, ensure_ascii=False))
 
@@ -45,8 +53,9 @@ class OrderController:
         data = {
             "method": "POST",
             "message": "Створено новий ресурс",
+            "headers": self.request.headers
         }
-
+        print("Content-Type: application/json; charset=utf-8")
         print()
         print(json.dumps(data, ensure_ascii=False))
 
@@ -54,8 +63,9 @@ class OrderController:
         data = {
             "method": "PUT",
             "message": "Ресурс повністю оновлено",
+            "headers": self.request.headers
         }
-
+        print("Content-Type: application/json; charset=utf-8")
         print()
         print(json.dumps(data, ensure_ascii=False))
 
@@ -63,8 +73,9 @@ class OrderController:
         data = {
             "method": "PATCH",
             "message": "Ресурс частково оновлено",
+            "headers": self.request.headers
         }
-
+        print("Content-Type: application/json; charset=utf-8")
         print()
         print(json.dumps(data, ensure_ascii=False))
 
@@ -72,8 +83,9 @@ class OrderController:
         data = {
             "method": "DELETE",
             "message": "Ресурс видалено",
+            "headers": self.request.headers
         }
-
+        print("Content-Type: application/json; charset=utf-8")
         print()
         print(json.dumps(data, ensure_ascii=False))
 
