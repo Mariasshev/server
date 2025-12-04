@@ -69,6 +69,14 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 print("Content-Type: application/json; charset=utf-8")
 
 
+def send_error(message, code=404, phrase="Not Found") :
+    print(f"Status: {code} {phrase}\n")
+    print("Content-Type: text/html; charset=utf-8")
+    print()
+    print(message)
+    sys.stdout.flush()
+    os._exit(0)
+
 # маршрутизація контролерів
 sys.path.append("./")   # додаємо поточну директорію як таку, в якій шукаються модулі динамічного імпорту
 import importlib        # підключаємо інструменти для динамічного імпорту
@@ -77,23 +85,34 @@ try :
     # шукаємо (підключаємо) модуль з іменем module_name
     controller_module = importlib.import_module(f"controllers.{module_name}")
 
-    # у ньому знаходимо клас class_name, створюємо з нього об'єкт
-    controller_class = getattr(controller_module, class_name)
-    controller_object = controller_class(
-        CgiRequest(
-            server=server,
-            query_params=query_params,
-            headers=headers,
-            path=path,
-            controller=controller,
-            path_parts=parts[1:]
-        )
+except Exception as ex:
+    send_error(f"Controller not found: {module_name}")
+
+# у ньому знаходимо клас class_name, створюємо з нього об'єкт
+controller_class = getattr(controller_module, class_name, None)
+if controller_class is None :
+    send_error(f"Controller class not found: {module_name}")
+
+controller_object = controller_class(
+    CgiRequest(
+        server=server,
+        query_params=query_params,
+        headers=headers,
+        path=path,
+        controller=controller,
+        path_parts=parts[1:]
     )
-    # шукаємо в об'єкті метод serve та виконуємо його - передаємо управління контролеру
-    serve_action = getattr(controller_object, "serve")
+)
+# шукаємо в об'єкті метод serve
+serve_action = getattr(controller_object, "serve", None)
+if serve_action is None:
+    send_error(f"Controller class not found: {module_name}")
+
+# ... та виконуємо його - передаємо управління контролеру
+try:
     serve_action()
 except Exception as ex:
-    print("Status: 404 Not Found\n")
-    if DEV_MODE : print(ex)
-finally :
-    sys.stdout.flush()
+    message = "Request processing error"
+    if DEV_MODE : message += str(ex)
+    send_error(message, code=500, phrase="Internal server error")
+
