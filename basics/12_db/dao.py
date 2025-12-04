@@ -6,6 +6,7 @@ import mysql.connector
 import random
 import string
 import sys
+from datetime import datetime
 
 class DataAccessor :
     def __init__(self, ini_file="./db.json"):
@@ -203,64 +204,85 @@ class DataAccessor :
         return row if dk == row["user_access_dk"] else None
     
 
-    def register_user(self, name:str, email:str, login:str, password:str, birthdate:str|None=None) :
-        sql = "SELECT COUNT(*) FROM user_accesses WHERE user_access_login = ?"
-        if self.db_connection is None : 
+    def register_user(self, name:str, email:str, login:str, password:str, birthdate:str|None=None):
+        # Перевірка унікальності логіна
+        sql_check = "SELECT COUNT(*) FROM user_accesses WHERE user_access_login = ?"
+        if self.db_connection is None: 
             raise RuntimeError("Connection empty in "+sys._getframe(0).f_code.co_name)
-        with self.db_connection.cursor(prepared=True) as cursor :
-            cursor.execute(sql, (login,))
-            cnt=next(cursor)[0]
-        if cnt > 0 :
+        with self.db_connection.cursor(prepared=True) as cursor:
+            cursor.execute(sql_check, (login,))
+            cnt = next(cursor)[0]
+        if cnt > 0:
             raise ValueError("Login in use")
+
+        # Валідація дати народження
+        birthdate_obj = None
+        if birthdate:
+            try:
+                birthdate_obj = datetime.strptime(birthdate, "%Y-%m-%d")
+            except ValueError:
+                raise ValueError("Неправильний формат дати народження. Використовуйте YYYY-MM-DD")
+
         user_id = self.get_db_identity()
         salt = self.gerenate_salt()
-        dk=self.kdf1(password, salt)
+        dk = self.kdf1(password, salt)
+
+        # SQL
+        sql_user = """INSERT INTO users(user_id, user_name, user_email, user_birthdate) 
+                    VALUES(?, ?, ?, ?)"""
+        sql_access = """INSERT INTO user_accesses(user_access_id, user_id, role_id, 
+                        user_access_login, user_access_salt, user_access_dk) 
+                        VALUES(UUID(), ?, 'user', ?, ?, ?)"""
+
         try:
-            with self.db_connection.cursor(prepared=True) as cursor :
-                cursor.execute(
-                    "INSERT INTO users(user_id, user_name, user_email) VALUES(?, ?, ?)",
-                      (user_id, name, email))
-                cursor.execute(
-                    "INSERT INTO user_accesses(user_access_id, user_id, role_id, user_access_login, user_access_salt, user_access_dk) VALUES(UUID(), ?, 'user', ?, ?, ?)",
-                      (user_id, login, salt, dk))
+            with self.db_connection.cursor(prepared=True) as cursor:
+                cursor.execute(sql_user, (user_id, name, email, birthdate_obj))
+                cursor.execute(sql_access, (user_id, login, salt, dk))
                 self.db_connection.commit()
         except mysql.connector.Error as err:
-            print(err)
             self.db_connection.rollback()
             raise RuntimeError(str(err))
-        else :
+        else:
             return user_id
-    
 
 
 
-def main() :
-    try : 
+def main():
+
+    try:
         data_accessor = DataAccessor()
-       # data_accessor.seed()
-       # print(data_accessor.get_db_identity())
-    except RuntimeError as err :
+        data_accessor.install() 
+    except RuntimeError as err:
         print(err)
         return
-    else :
-        # data_accessor.install()
-       
-       # print(data_accessor._kdf1("123", "456")) # 72c94aeca814edb0e7c1
-        print(data_accessor.gerenate_salt())
 
-    #name = input("name: ")
-    #email = input("email: ")
-    #login = input("login: ")
-    #password = input("password: ")
-    #try: 
-    #    print(data_accessor.register_user(name, email, login, password))
-    #except Exception as err:
-    #    print(err)
+    print("=== Реєстрація нового користувача ===")
+    name = input("Ім'я: ").strip()
+    email = input("Email: ").strip()
+    login = input("Логін: ").strip()
+    password = input("Пароль: ").strip()
+    birthdate = input("Дата народження (YYYY-MM-DD, можна пропустити): ").strip()
 
-    
-    login = input("login: ")
-    password = input("password: ")
-    print(data_accessor.authenticate( login, password))
+    if birthdate == "":
+        birthdate = None
+
+    try:
+        user_id = data_accessor.register_user(name, email, login, password, birthdate)
+        print(f"Користувач зареєстрований успішно. ID = {user_id}")
+    except ValueError as ve:
+        print("Помилка реєстрації:", ve)
+    except RuntimeError as re:
+        print("Помилка роботи з БД:", re)
+
+    print("\n=== Авторизація користувача ===")
+    login_check = input("Логін: ").strip()
+    password_check = input("Пароль: ").strip()
+    auth_result = data_accessor.authenticate(login_check, password_check)
+    if auth_result:
+        print("Авторизація успішна! Інформація про користувача:")
+        print(auth_result)
+    else:
+        print("Невірний логін або пароль")
 
 if __name__ == '__main__' :
     main()
