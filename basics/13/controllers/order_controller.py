@@ -1,96 +1,166 @@
 from models.request import CgiRequest
-import sys, json, io
+import json, datetime
+
+
+# ===== REST CORE (можно вынести в общий модуль) =====
+
+class RestStatus:
+    def __init__(self, is_ok: bool, code: int, message: str):
+        self.is_ok = is_ok
+        self.code = code
+        self.message = message
+
+RestStatus.status200 = RestStatus(True, 200, "OK")
+RestStatus.status201 = RestStatus(True, 201, "Created")
+RestStatus.status204 = RestStatus(True, 204, "No Content")
+RestStatus.status403 = RestStatus(False, 403, "Forbidden")
+RestStatus.status405 = RestStatus(False, 405, "Method Not Allowed")
+RestStatus.status500 = RestStatus(False, 500, "Internal Server Error")
+
+
+class RestCache:
+    def __init__(self, lifetime: int | None = None):
+        self.lifetime = lifetime
+
+    def to_json(self):
+        return {
+            "lifetime": self.lifetime,
+            "units": "seconds"
+        }
+
+RestCache.no = RestCache()
+RestCache.hrs1 = RestCache(60 * 60)
+
+
+class RestMeta:
+    def __init__(
+        self,
+        service: str,
+        requestMethod: str,
+        dataType: str = "null",
+        cache: RestCache = RestCache.no,
+        params: dict | None = None,
+        links: dict | None = None
+    ):
+        self.service = service
+        self.requestMethod = requestMethod
+        self.dataType = dataType
+        self.cache = cache
+        self.serverTime = datetime.datetime.now().timestamp()
+        self.params = params
+        self.links = links
+
+
+class RestResponse:
+    def __init__(
+        self,
+        meta: RestMeta,
+        status: RestStatus = RestStatus.status200,
+        data: any = None
+    ):
+        self.status = status
+        self.meta = meta
+        self.data = data
+
+
+# ===== ORDER CONTROLLER =====
 
 class OrderController:
 
     def __init__(self, request: CgiRequest):
         self.request = request
+        self.response: RestResponse | None = None
 
     def serve(self):
-        # проверяем наличие кастомного заголовка
-        if "My-Custom-Header" not in self.request.headers:
-            print("Status: 403 Forbidden")
-            print("Content-Type: text/plain; charset=utf-8")
-            print()
-            print("Custom header is missing")
-            return
+        try:
+            # проверка кастомного заголовка
+            if "My-Custom-Header" not in self.request.headers:
+                self.response = RestResponse(
+                    meta=RestMeta(
+                        service="Order API",
+                        requestMethod=self.request.request_method
+                    ),
+                    status=RestStatus.status403
+                )
+                return self._print()
 
-        # получаем метод запроса
-        method = getattr(self.request, "request_method", "GET").upper()
+            self.response = RestResponse(
+                meta=RestMeta(
+                    service="Order API",
+                    requestMethod=self.request.request_method,
+                    links={
+                        "get": "GET /order",
+                        "post": "POST /order",
+                        "put": "PUT /order/{id}",
+                        "patch": "PATCH /order/{id}",
+                        "delete": "DELETE /order/{id}"
+                    }
+                )
+            )
 
-        if method == "GET":
-            return self.do_get()
-        if method == "POST":
-            return self.do_post()
-        if method == "PUT":
-            return self.do_put()
-        if method == "PATCH":
-            return self.do_patch()
-        if method == "DELETE":
-            return self.do_delete()
+            action = "do_" + self.request.request_method.lower()
+            handler = getattr(self, action, None)
 
-        print("Status: 405 Method Not Allowed")
-        print("Content-Type: text/plain; charset=utf-8")
+            if handler:
+                handler()
+            else:
+                self.response.status = RestStatus.status405
+
+        except Exception as e:
+            self.response = RestResponse(
+                meta=RestMeta(
+                    service="Order API",
+                    requestMethod=self.request.request_method
+                ),
+                status=RestStatus.status500,
+                data={"error": str(e)}
+            )
+
+        self._print()
+
+    # ===== OUTPUT =====
+
+    def _print(self):
+        print("Content-Type: application/json; charset=utf-8")
         print()
-        print("Method not allowed")
+        print(json.dumps(self.response, default=lambda o: o.__dict__, ensure_ascii=False))
 
-    # =====================
-    # HTTP METHODS
-    # =====================
+    # ===== HTTP METHODS =====
 
     def do_get(self):
-        data = {
-            "method": "GET",
-            "message": "Отримано дані",
-            "sample": [1, 2, 3],
-            "headers": self.request.headers
-        }
-        print("Content-Type: application/json; charset=utf-8")
-        print()
-        print(json.dumps(data, ensure_ascii=False))
+        self.response.meta.dataType = "array"
+        self.response.meta.cache = RestCache.hrs1
+        self.response.data = [
+            {"id": 1, "price": 1200, "status": "new"},
+            {"id": 2, "price": 5400, "status": "paid"}
+        ]
 
     def do_post(self):
-        data = {
-            "method": "POST",
-            "message": "Створено новий ресурс",
-            "headers": self.request.headers
+        self.response.status = RestStatus.status201
+        self.response.meta.dataType = "object"
+        self.response.data = {
+            "id": 3,
+            "status": "created"
         }
-        print("Content-Type: application/json; charset=utf-8")
-        print()
-        print(json.dumps(data, ensure_ascii=False))
 
     def do_put(self):
-        data = {
-            "method": "PUT",
-            "message": "Ресурс повністю оновлено",
-            "headers": self.request.headers
+        self.response.meta.dataType = "object"
+        self.response.data = {
+            "message": "Order fully updated"
         }
-        print("Content-Type: application/json; charset=utf-8")
-        print()
-        print(json.dumps(data, ensure_ascii=False))
 
     def do_patch(self):
-        data = {
-            "method": "PATCH",
-            "message": "Ресурс частково оновлено",
-            "headers": self.request.headers
+        self.response.meta.dataType = "object"
+        self.response.data = {
+            "message": "Order partially updated"
         }
-        print("Content-Type: application/json; charset=utf-8")
-        print()
-        print(json.dumps(data, ensure_ascii=False))
 
     def do_delete(self):
-        data = {
-            "method": "DELETE",
-            "message": "Ресурс видалено",
-            "headers": self.request.headers
-        }
-        print("Content-Type: application/json; charset=utf-8")
-        print()
-        print(json.dumps(data, ensure_ascii=False))
+        self.response.status = RestStatus.status204
+        self.response.data = None
 
-    # опційно
+    # optional
     def index(self):
         print("Content-Type: text/html; charset=utf-8")
         print()
-        print("<h1>Order API Controller</h1>")
+        print("<h1>Order Controller</h1>")
