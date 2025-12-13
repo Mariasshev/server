@@ -2,7 +2,7 @@ from models.request import CgiRequest
 import json, datetime
 
 
-# ===== REST CORE (можно вынести в общий модуль) =====
+# ===== REST  =====
 
 class RestStatus:
     def __init__(self, is_ok: bool, code: int, message: str):
