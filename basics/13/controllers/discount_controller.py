@@ -1,33 +1,28 @@
-from models.request import CgiRequest
-import sys, json, io, datetime
+from controllers.controller_rest import RestController, RestMeta, RestStatus, RestCache
 
-class DiscountController :
 
-    def __init__(self, request: CgiRequest):
-        self.request = request
+class DiscountController(RestController):
 
     def serve(self) :
-        self.response = RestResponse(
-                meta=RestMeta(
-                    service="User API",
-                    requestMethod=self.request.request_method,
-                    links={
-                        "get": "GET /discount",
-                        "post": "POST /discount",
-                    }
-                )
+        self.response.meta = RestMeta(
+                service="Discount API",
+                links={
+                    "get": "GET /discount",
+                    "post": "POST /discount",
+                }
             )
+        
+        super().serve()
+        
 
-        action = "do_" + self.request.request_method.lower()
-        controller_action = getattr(self, action, None)
-
-        if controller_action:
-            controller_action()
-        else:
-            self.response.status = RestStatus.status405
-    
-
-        print("Content-Type: application/json; charset=utf-8")
-        print()
-
-        print(json.dumps(self.response, default=lambda o: o.__dict__, ensure_ascii=False))
+    def do_get(self):
+        self.response.meta.service += ": Users`s bonuses"
+        self.response.meta.cache = RestCache.hrs1
+        self.response.meta.dataType = "object"
+        self.response.data = {
+            "int": 10,
+            "float": 1e-3,
+            "str": "GET",
+            "cyr": "Вітання",
+            "headers": self.request.headers
+        }
