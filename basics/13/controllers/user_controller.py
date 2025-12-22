@@ -1,5 +1,6 @@
 from controllers.controller_rest import RestController, RestMeta, RestStatus, RestCache
-import base64, binascii, re
+import base64, binascii, re, datetime, helper
+from views.dao.data_accessor import DataAccessor
 class UserController(RestController):
 
     def serve(self):
@@ -67,18 +68,26 @@ class UserController(RestController):
 
         login, password = user_pass.split(':', 1)
 
+        data_accessor = DataAccessor()
+        user = data_accessor.authenticate(login, password)
+
+        if not user :
+            self.send_401(f"credentials rejected) {user_pass}")
+            return
+
+
         self.response.meta.cache = RestCache.hrs1
         self.response.meta.dataType = "object"
-        self.response.data = {
-            # "int": 10,
-            # "float": 1e-3,
-            # "str": "GET",
-            # "cyr": "Вітання",
-            # "headers": self.request.
-            "login":login,
-            "password":password
-
+        payload = {
+            "sub": str(user['user_id']),
+            "iss": "Server-KN-P-221",
+            "aud": user['role_id'],
+            "iat": datetime.datetime.now().timestamp(),
+            "name": user['user_name'],
+            "email": user['user_email'],
         }
+        self.response.data = helper.compose_jwt(payload)
+        
 
 
     def do_post(self):
